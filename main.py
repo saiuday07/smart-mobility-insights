@@ -1,73 +1,76 @@
-# main.py
+from collections import defaultdict
 
-from automation.distance_service import get_distance
-from automation.decision_engine import choose_pricing_model
-from core.toll_engine import (
-    calculate_slab_toll,
-    calculate_dynamic_toll,
-    vehicle_multiplier
-)
-from automation.traffic_insights import (
-    display_traffic_summary,
-    mobility_nudge
-)
+# Set road type: "city" or "highway"
+ROAD_TYPE = "city"
 
-def calculate_toll_flow():
-    print("\n--- TOLL CALCULATION ---")
-    entry = input("Enter ENTRY gate (GateA/GateB/GateC/GateD): ")
-    exit = input("Enter EXIT gate (GateA/GateB/GateC/GateD): ")
-    vehicle = input("Enter vehicle (bike/car/bus/truck/ambulance): ")
+# Base toll rates for highway use
+BASE_TOLL = {
+    "bike": 0,
+    "car": 10,
+    "bus": 20,
+    "truck": 30
+}
 
-    distance = get_distance(entry, exit)
-    if distance is None:
-        print("❌ Invalid route.")
-        return
+# Sample vehicle movement data
+vehicle_log = [
+    ("GateA", "GateB", "car", 5),
+    ("GateA", "GateC", "bus", 8),
+    ("GateB", "GateC", "car", 4),
+    ("GateA", "GateD", "truck", 12),
+    ("GateC", "GateD", "bike", 6),
+    ("GateB", "GateD", "car", 10),
+]
 
-    pricing_model = choose_pricing_model(distance)
+# Count vehicles passing through each gate
+def gate_footfall():
+    counts = defaultdict(int)
+    for entry, exit, _, _ in vehicle_log:
+        counts[entry] += 1
+        counts[exit] += 1
+    return counts
 
-    if pricing_model == "slab":
-        base_toll = calculate_slab_toll(distance)
-    else:
-        base_toll = calculate_dynamic_toll(distance)
-
-    multiplier = vehicle_multiplier(vehicle)
-    final_toll = base_toll * multiplier
-
-    print("\n--- SYSTEM OUTPUT ---")
-    print(f"Distance: {distance} km")
-    print(f"Pricing Model: {pricing_model.upper()}")
-    print(f"Final Toll: ₹{round(final_toll, 2)}")
-
-def mobility_nudge_flow():
-    print("\n--- SAFE MOBILITY NUDGE ---")
-    entry = input("Enter ENTRY gate: ")
-    exit = input("Enter EXIT gate: ")
-    mobility_nudge(entry, exit)
-
-def dashboard():
-    while True:
-        print("\n===============================")
-        print(" SMART MOBILITY INSIGHTS SYSTEM ")
-        print("===============================")
-        print("1. View Traffic & Footfall Summary")
-        print("2. Get Safe Mobility Nudge")
-        print("3. Calculate Toll for a Route")
-        print("4. Exit")
-
-        choice = input("Enter your choice (1-4): ")
-
-        if choice == "1":
-            display_traffic_summary()
-        elif choice == "2":
-            mobility_nudge_flow()
-        elif choice == "3":
-            calculate_toll_flow()
-        elif choice == "4":
-            print("Exiting system. Goodbye!")
-            break
+# Show traffic level at each gate
+def display_traffic_summary():
+    counts = gate_footfall()
+    print("\n--- Traffic Summary ---")
+    for gate, num in counts.items():
+        if num >= 4:
+            congestion = "High"
+        elif num >= 2:
+            congestion = "Moderate"
         else:
-            print("❌ Invalid choice. Try again.")
+            congestion = "Low"
+        print(f"{gate}: {num} vehicles ({congestion})")
 
-# Program entry point
+# Give safety suggestion based on congestion
+def mobility_nudge(entry, exit):
+    counts = gate_footfall()
+    if counts.get(entry, 0) >= 4 or counts.get(exit, 0) >= 4:
+        print("⚠️ Route is crowded. Consider another path or time.")
+    else:
+        print("✅ Route is clear and safe.")
+
+# Calculate toll only when road is highway
+def calculate_toll(vehicle, distance_km):
+    if ROAD_TYPE == "city":
+        return 0
+    return BASE_TOLL.get(vehicle, 0) + distance_km * 2
+
+# Run the command-line dashboard
+def run_dashboard():
+    print("\nSmart Mobility Insights System")
+    print(f"Road Type: {ROAD_TYPE}")
+
+    display_traffic_summary()
+
+    for entry, exit, vehicle, distance in vehicle_log:
+        print("\nTrip:", entry, "to", exit)
+        mobility_nudge(entry, exit)
+        toll = calculate_toll(vehicle, distance)
+        print(f"Vehicle: {vehicle}")
+        print(f"Distance: {distance} km")
+        print(f"Toll: ₹{toll}")
+
+# Start the program
 if __name__ == "__main__":
-    dashboard()
+    run_dashboard()
