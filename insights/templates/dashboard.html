@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Smart Mobility{% endblock %}
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+.stat-card { border-radius: 12px; padding: 20px; text-align: center; color: white; }
+.stat-card h2 { margin: 0; font-size: 32px; font-weight: 700; }
+.stat-card p { margin: 0; opacity: 0.9; font-size: 14px; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="container-fluid p-4">
+    <h4 class="mb-4">👤 {{ user.username }}'s Dashboard</h4>
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <div class="stat-card bg-primary">
+                <p>Total Trips</p>
+                <h2>{{ total_trips }}</h2>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="stat-card bg-success">
+                <p>Total Toll Spent</p>
+                <h2>₹{{ total_toll }}</h2>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="stat-card bg-info">
+                <p>Avg per Trip</p>
+                <h2>₹{% if total_trips %}{{ total_toll|floatformat:2 }}{% else %}0{% endif %}</h2>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">Trip History</div>
+                <div class="card-body p-0">
+                    <table class="table table-striped mb-0">
+                        <thead><tr><th>From</th><th>To</th><th>Vehicle</th><th>Dist (km)</th><th>Toll (₹)</th><th>Date</th></tr></thead>
+                        <tbody>
+                            {% for trip in recent_trips %}
+                            <tr>
+                                <td>{{ trip.origin_name|truncatechars:25 }}</td>
+                                <td>{{ trip.dest_name|truncatechars:25 }}</td>
+                                <td>{{ trip.vehicle_type }}</td>
+                                <td>{{ trip.distance_km }}</td>
+                                <td>{{ trip.toll_amount|floatformat:2|default:"-" }}</td>
+                                <td>{{ trip.created_at|date:"d M H:i" }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="6" class="text-center text-muted py-3">No trips yet. Go plan a route!</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">Spending Trend</div>
+                <div class="card-body">
+                    <canvas id="spendingChart" height="200"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const trips = {{ trips_json|safe }};
+if (trips.length > 0 && document.getElementById('spendingChart')) {
+    const byDate = {};
+    trips.forEach(t => {
+        const d = new Date(t.created_at).toLocaleDateString();
+        byDate[d] = (byDate[d] || 0) + (t.toll_amount || 0);
+    });
+    const labels = Object.keys(byDate).reverse();
+    const data = labels.map(l => byDate[l]);
+    new Chart(document.getElementById('spendingChart'), {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{ label: 'Toll (₹)', data: data, borderColor: '#0d6efd', tension: 0.3, fill: true }]
+        },
+        options: { responsive: true, plugins: { legend: { display: false } } }
+    });
+}
+</script>
+{% endblock %}

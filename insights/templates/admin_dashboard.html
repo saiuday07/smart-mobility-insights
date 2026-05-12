@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}Admin Dashboard — Smart Mobility{% endblock %}
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+.stat-card { border-radius: 12px; padding: 20px; text-align: center; color: white; }
+.stat-card h2 { margin: 0; font-size: 32px; font-weight: 700; }
+.stat-card p { margin: 0; opacity: 0.9; font-size: 14px; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="container-fluid p-4">
+    <h4 class="mb-4">🏛️ Government Admin Dashboard</h4>
+
+    <div class="row g-3 mb-4">
+        <div class="col-3">
+            <div class="stat-card bg-danger">
+                <p>Today's Revenue</p>
+                <h2>₹{{ today_revenue }}</h2>
+            </div>
+        </div>
+        <div class="col-3">
+            <div class="stat-card bg-warning text-dark">
+                <p>This Week</p>
+                <h2>₹{{ week_revenue }}</h2>
+            </div>
+        </div>
+        <div class="col-3">
+            <div class="stat-card bg-success">
+                <p>Total Revenue</p>
+                <h2>₹{{ total_revenue }}</h2>
+            </div>
+        </div>
+        <div class="col-3">
+            <div class="stat-card bg-primary">
+                <p>Total Trips</p>
+                <h2>{{ total_trips }}</h2>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-8">
+            <div class="card"><div class="card-header">📈 Daily Revenue (30 days)</div>
+            <div class="card-body"><canvas id="revenueChart" height="250"></canvas></div></div>
+        </div>
+        <div class="col-md-4">
+            <div class="card"><div class="card-header">🚗 Vehicle Breakdown</div>
+            <div class="card-body"><canvas id="vehicleChart" height="250"></canvas></div></div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">📋 Recent Toll Collections</div>
+        <div class="card-body p-0">
+            <table class="table table-striped mb-0">
+                <thead><tr><th>User</th><th>From</th><th>To</th><th>Vehicle</th><th>Distance</th><th>Toll</th><th>Model</th><th>Date</th></tr></thead>
+                <tbody>
+                    {% for trip in recent_trips %}
+                    <tr>
+                        <td>{{ trip.user.username }}</td>
+                        <td>{{ trip.origin_name|truncatechars:20 }}</td>
+                        <td>{{ trip.dest_name|truncatechars:20 }}</td>
+                        <td>{{ trip.vehicle_type }}</td>
+                        <td>{{ trip.distance_km }} km</td>
+                        <td>₹{{ trip.toll_amount|floatformat:2 }}</td>
+                        <td>{{ trip.pricing_model }}</td>
+                        <td>{{ trip.created_at|date:"d M H:i" }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="8" class="text-center text-muted py-3">No toll data yet.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+fetch('/api/admin/stats/')
+    .then(r => r.json())
+    .then(data => {
+        if (document.getElementById('revenueChart')) {
+            new Chart(document.getElementById('revenueChart'), {
+                type: 'line',
+                data: {
+                    labels: data.daily_revenue.map(d => d.date.slice(5)),
+                    datasets: [{ label: 'Revenue (₹)', data: data.daily_revenue.map(d => d.revenue), borderColor: '#198754', tension: 0.3, fill: true }]
+                },
+                options: { responsive: true, plugins: { legend: { display: false } } }
+            });
+        }
+        if (document.getElementById('vehicleChart')) {
+            new Chart(document.getElementById('vehicleChart'), {
+                type: 'pie',
+                data: {
+                    labels: data.vehicle_breakdown.map(v => v.vehicle_type || 'unknown'),
+                    datasets: [{ data: data.vehicle_breakdown.map(v => v.total), backgroundColor: ['#0d6efd','#198754','#ffc107','#dc3545','#6f42c1'] }]
+                }
+            });
+        }
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,37 @@
+{
+    "toll": {
+        "slabs": [
+            {"max_km": 5, "rate": 10},
+            {"max_km": 10, "rate": 20},
+            {"max_km": 15, "rate": 30},
+            {"max_km": 20, "rate": 40},
+            {"max_km": null, "rate": 60}
+        ],
+        "dynamic_rate_per_km": 2.0,
+        "decision_threshold_km": 10,
+        "vehicle_multipliers": {
+            "bike": 0.5,
+            "car": 1.0,
+            "bus": 1.5,
+            "truck": 2.0,
+            "ambulance": 0.0
+        }
+    },
+    "traffic": {
+        "congestion_thresholds": {
+            "light": 1.2,
+            "moderate": 1.5,
+            "heavy": 2.0
+        },
+        "peak_hours": {
+            "morning": {"start": "07:00", "end": "10:00"},
+            "evening": {"start": "17:00", "end": "20:00"}
+        },
+        "congestion_factors": {
+            "peak": 1.8,
+            "shoulder": 1.3,
+            "off_peak": 1.0,
+            "night": 0.7
+        }
+    }
+}
