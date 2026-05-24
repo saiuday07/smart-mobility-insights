@@ -1,34 +1,35 @@
-# toll_engine.py
+import json
+import os
+
+
+def _load_config():
+    path = os.path.join(os.path.dirname(__file__), '..', 'data', 'config.json')
+    with open(path) as f:
+        return json.load(f)
+
 
 def calculate_slab_toll(distance):
-    # Slabs increase gradually
-    if distance <= 5:
-        return 10
-    elif distance <= 10:
-        return 20
-    elif distance <= 15:
-        return 30
-    elif distance <= 20:
-        return 40
-    else:
-        return 60
+    config = _load_config()
+    tc = config['toll']
+    for slab in tc['slabs']:
+        if slab['max_km'] is None or distance <= slab['max_km']:
+            return slab['rate']
+    return tc['slabs'][-1]['rate']
 
 
 def calculate_dynamic_toll(distance):
-    rate_per_km = 2
-    return distance * rate_per_km
+    config = _load_config()
+    return distance * config['toll']['dynamic_rate_per_km']
 
 
 def vehicle_multiplier(vehicle):
-    if vehicle == "bike":
-        return 0.5
-    elif vehicle == "car":
-        return 1.0
-    elif vehicle == "bus":
-        return 1.5
-    elif vehicle == "truck":
-        return 2.0
-    elif vehicle == "ambulance":
-        return 0
-    else:
-        return 1.0
+    config = _load_config()
+    return config['toll']['vehicle_multipliers'].get(vehicle.lower(), 1.0)
+
+
+def choose_pricing_model(distance):
+    if distance is None:
+        return "slab"
+    config = _load_config()
+    threshold = config['toll']['decision_threshold_km']
+    return "slab" if distance <= threshold else "dynamic"

@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Trip, TollCollection, CongestionLog
+from .models import Trip, TollCollection, CongestionLog, RoadCondition
 
 
 @admin.register(Trip)
@@ -20,3 +20,10 @@ class TollCollectionAdmin(admin.ModelAdmin):
 class CongestionLogAdmin(admin.ModelAdmin):
     list_display = ['location_name', 'level', 'source', 'created_at']
     list_filter = ['source', 'created_at']
+
+
+@admin.register(RoadCondition)
+class RoadConditionAdmin(admin.ModelAdmin):
+    list_display = ['road_name', 'condition_type', 'severity', 'status', 'report_count', 'created_at']
+    list_filter = ['condition_type', 'severity', 'status']
+    search_fields = ['road_name', 'description']

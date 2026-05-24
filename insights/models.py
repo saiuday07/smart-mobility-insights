@@ -47,3 +47,46 @@ class CongestionLog(models.Model):
 
     def __str__(self):
         return f"{self.location_name} ({self.level})"
+
+
+class RoadCondition(models.Model):
+    CONDITION_CHOICES = [
+        ('good', 'Good'),
+        ('fair', 'Fair'),
+        ('poor', 'Poor'),
+        ('under_construction', 'Under Construction'),
+        ('closed', 'Closed'),
+        ('accident', 'Accident'),
+        ('flooding', 'Flooding'),
+        ('pothole', 'Pothole'),
+    ]
+    SEVERITY_CHOICES = [
+        ('low', 'Low'),
+        ('medium', 'Medium'),
+        ('high', 'High'),
+        ('critical', 'Critical'),
+    ]
+    STATUS_CHOICES = [
+        ('reported', 'Reported'),
+        ('verified', 'Verified'),
+        ('resolved', 'Resolved'),
+    ]
+
+    road_name = models.CharField(max_length=255)
+    lat = models.FloatField()
+    lng = models.FloatField()
+    condition_type = models.CharField(max_length=30, choices=CONDITION_CHOICES)
+    severity = models.CharField(max_length=10, choices=SEVERITY_CHOICES, default='medium')
+    description = models.TextField(blank=True)
+    reported_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    report_count = models.PositiveIntegerField(default=1)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='reported')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.get_condition_type_display()} on {self.road_name} ({self.get_status_display()})"

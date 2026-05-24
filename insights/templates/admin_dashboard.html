@@ -1,7 +1,8 @@
 {% extends "base.html" %}
+{% load static %}
 {% block title %}Admin Dashboard — Smart Mobility{% endblock %}
 {% block extra_head %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script src="{% static 'vendor/chartjs/chart.umd.min.js' %}"></script>
 <style>
 .stat-card { border-radius: 12px; padding: 20px; text-align: center; color: white; }
 .stat-card h2 { margin: 0; font-size: 32px; font-weight: 700; }
@@ -10,7 +11,7 @@
 {% endblock %}
 {% block content %}
 <div class="container-fluid p-4">
-    <h4 class="mb-4">🏛️ Government Admin Dashboard</h4>
+    <h4 class="mb-4">Government Admin Dashboard</h4>
 
     <div class="row g-3 mb-4">
         <div class="col-3">
@@ -41,17 +42,108 @@
 
     <div class="row g-3 mb-4">
         <div class="col-md-8">
-            <div class="card"><div class="card-header">📈 Daily Revenue (30 days)</div>
-            <div class="card-body"><canvas id="revenueChart" height="250"></canvas></div></div>
+            <div class="card"><div class="card-header">Daily Revenue (30 days)</div>
+            <div class="card-body"><canvas id="revenueChart" height="200"></canvas></div></div>
         </div>
         <div class="col-md-4">
-            <div class="card"><div class="card-header">🚗 Vehicle Breakdown</div>
-            <div class="card-body"><canvas id="vehicleChart" height="250"></canvas></div></div>
+            <div class="card"><div class="card-header">Vehicle Breakdown</div>
+            <div class="card-body"><canvas id="vehicleChart" height="200"></canvas></div></div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">Top Users</div>
+                <div class="card-body p-0">
+                    <table class="table table-sm mb-0">
+                        <thead><tr><th>User</th><th>Trips</th><th>Total Spent</th><th>Last Trip</th></tr></thead>
+                        <tbody>
+                            {% for u in top_users %}
+                            <tr>
+                                <td>{{ u.username }}</td>
+                                <td>{{ u.trip_count }}</td>
+                                <td>₹{{ u.total_spent|floatformat:2|default:"0" }}</td>
+                                <td>{{ u.trips.all.0.created_at|date:"d M"|default:"-" }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="4" class="text-center text-muted py-3">No trip data yet.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">System Configuration</div>
+                <div class="card-body">
+                    <table class="table table-sm mb-0">
+                        <tr><th>Toll Slabs</th><td>
+                            {% for slab in config.toll.slabs %}
+                                {% if slab.max_km %}≤{{ slab.max_km }}km{% else %}&gt;20km{% endif %}: ₹{{ slab.rate }}{% if not forloop.last %}, {% endif %}
+                            {% endfor %}
+                        </td></tr>
+                        <tr><th>Dynamic Rate</th><td>₹{{ config.toll.dynamic_rate_per_km }}/km</td></tr>
+                        <tr><th>Decision Threshold</th><td>{{ config.toll.decision_threshold_km }} km</td></tr>
+                        <tr><th>Vehicle Multipliers</th><td>
+                            {% for k, v in config.toll.vehicle_multipliers.items %}
+                                {{ k }}: {{ v }}{% if not forloop.last %}, {% endif %}
+                            {% endfor %}
+                        </td></tr>
+                        <tr><th>Peak Hours</th><td>{{ config.traffic.peak_hours.morning.start }}-{{ config.traffic.peak_hours.morning.end }}, {{ config.traffic.peak_hours.evening.start }}-{{ config.traffic.peak_hours.evening.end }}</td></tr>
+                        <tr><th>Congestion Factors</th><td>
+                            {% for k, v in config.traffic.congestion_factors.items %}
+                                {{ k }}: {{ v }}{% if not forloop.last %}, {% endif %}
+                            {% endfor %}
+                        </td></tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    Road Conditions
+                    <span class="ms-3 badge bg-secondary">{{ rc_stats.open }} open</span>
+                    <span class="badge bg-success">{{ rc_stats.resolved }} resolved</span>
+                    <span class="badge bg-primary">{{ rc_stats.total }} total</span>
+                </div>
+                <div class="card-body p-0">
+                    <table class="table table-sm mb-0">
+                        <thead><tr><th>Road</th><th>Condition</th><th>Severity</th><th>Reports</th><th>Status</th><th>Date</th><th>Action</th></tr></thead>
+                        <tbody>
+                            {% for rc in road_conditions %}
+                            <tr>
+                                <td>{{ rc.road_name|truncatechars:20 }}</td>
+                                <td>{{ rc.get_condition_type_display }}</td>
+                                <td><span class="badge bg-{% if rc.severity == 'critical' %}danger{% elif rc.severity == 'high' %}warning{% elif rc.severity == 'medium' %}info{% else %}secondary{% endif %}">{{ rc.get_severity_display }}</span></td>
+                                <td>{{ rc.report_count }}</td>
+                                <td><span class="badge bg-{% if rc.status == 'verified' %}success{% elif rc.status == 'resolved' %}light text-dark{% else %}secondary{% endif %}">{{ rc.get_status_display }}</span></td>
+                                <td>{{ rc.created_at|date:"d M H:i" }}</td>
+                                <td>
+                                    {% if rc.status != 'resolved' %}
+                                    <button class="btn btn-sm btn-outline-success resolve-btn" data-id="{{ rc.id }}">Resolve</button>
+                                    {% else %}
+                                    <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="7" class="text-center text-muted py-3">No road conditions reported.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     </div>
 
     <div class="card">
-        <div class="card-header">📋 Recent Toll Collections</div>
+        <div class="card-header">Recent Toll Collections</div>
         <div class="card-body p-0">
             <table class="table table-striped mb-0">
                 <thead><tr><th>User</th><th>From</th><th>To</th><th>Vehicle</th><th>Distance</th><th>Toll</th><th>Model</th><th>Date</th></tr></thead>
@@ -100,5 +192,15 @@ fetch('/api/admin/stats/')
             });
         }
     });
+
+document.querySelectorAll('.resolve-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+        const id = this.dataset.id;
+        fetch(`/api/road-conditions/${id}/resolve/`, { method: 'POST', headers: {'X-CSRFToken': '{{ csrf_token }}'} })
+            .then(r => r.json())
+            .then(d => { if (d.status) location.reload(); })
+            .catch(() => {});
+    });
+});
 </script>
 {% endblock %}

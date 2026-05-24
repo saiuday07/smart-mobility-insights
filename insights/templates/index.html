@@ -1,7 +1,7 @@
 {% extends "base.html" %}
+{% load static %}
 {% block title %}Route Planner — Smart Mobility{% endblock %}
 {% block extra_head %}
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
 html, body, #map { height: 100%; margin: 0; }
 .navbar { position: relative; z-index: 1000; }
@@ -20,6 +20,14 @@ html, body, #map { height: 100%; margin: 0; }
 .route-card .label { font-size: 12px; color: #6c757d; }
 .route-card .value { font-size: 16px; font-weight: 600; }
 .traffic-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; }
+.suggestions-box { position: absolute; z-index: 1000; background: white; border: 1px solid #ddd; max-height: 200px; overflow-y: auto; width: calc(100% - 16px); }
+.suggestion-item { padding: 6px 10px; cursor: pointer; font-size: 13px; border-bottom: 1px solid #f0f0f0; }
+.suggestion-item:hover { background: #e9ecef; }
+#origin-suggestions, #dest-suggestions { position: relative; }
+.input-group-sm .pin-btn { border-top-left-radius: 0; border-bottom-left-radius: 0; }
+.pin-active { border-color: #198754 !important; box-shadow: 0 0 0 2px rgba(25,135,84,0.25); }
+.pin-status { font-size: 11px; color: #198754; font-weight: 600; display: none; margin-top: 2px; }
+.pin-cursor { cursor: crosshair !important; }
 </style>
 {% endblock %}
 {% block content %}
@@ -27,13 +35,25 @@ html, body, #map { height: 100%; margin: 0; }
     <h5 class="mb-3">Route Planner</h5>
     <div class="mb-2">
         <label class="form-label small">Origin</label>
-        <input id="origin-input" class="form-control form-control-sm" placeholder="e.g. Hitech City, Hyderabad" autocomplete="off">
+        <div class="input-group input-group-sm">
+            <input id="origin-input" class="form-control" placeholder="Type or click pin" autocomplete="off">
+            <button id="origin-pin-btn" class="btn btn-outline-success pin-btn" title="Click on map to set origin">Pin</button>
+        </div>
         <div id="origin-suggestions" class="suggestions-box"></div>
+        <div id="origin-pin-status" class="pin-status">Click on the map to drop origin pin</div>
     </div>
     <div class="mb-2">
         <label class="form-label small">Destination</label>
-        <input id="dest-input" class="form-control form-control-sm" placeholder="e.g. Hyderabad Airport" autocomplete="off">
+        <div class="input-group input-group-sm">
+            <input id="dest-input" class="form-control" placeholder="Type or click pin" autocomplete="off">
+            <button id="dest-pin-btn" class="btn btn-outline-danger pin-btn" title="Click on map to set destination">Pin</button>
+        </div>
         <div id="dest-suggestions" class="suggestions-box"></div>
+        <div id="dest-pin-status" class="pin-status">Click on the map to drop destination pin</div>
+    </div>
+    <div class="d-flex gap-1 mb-3">
+        <button id="swap-btn" class="btn btn-sm btn-outline-secondary" title="Swap origin and destination">Swap</button>
+        <button id="clear-btn" class="btn btn-sm btn-outline-secondary" title="Clear all">Clear</button>
     </div>
     <div class="mb-3">
         <label class="form-label small">Vehicle</label>
@@ -47,6 +67,11 @@ html, body, #map { height: 100%; margin: 0; }
     </div>
     <button id="find-route-btn" class="btn btn-primary w-100 mb-3">Find Route</button>
 
+    <div class="d-flex gap-2 mb-3">
+        <button id="toggle-conditions-btn" class="btn btn-sm btn-outline-secondary flex-fill">Show Road Conditions</button>
+        <button id="toggle-traffic-overlay-btn" class="btn btn-sm btn-outline-secondary flex-fill">Show Traffic</button>
+    </div>
+
     <div id="results" style="display:none;">
         <h6 class="border-bottom pb-2 mb-3">Route Options</h6>
         <div id="routes-container"></div>
@@ -58,14 +83,37 @@ html, body, #map { height: 100%; margin: 0; }
             <span class="traffic-dot" style="background:#dc3545;"></span> Congested
         </div>
     </div>
+
+    <hr>
+    <h6>Report Road Condition</h6>
+    <div class="mb-2">
+        <input id="rc-road-name" class="form-control form-control-sm mb-1" placeholder="Road name (click map to set)">
+        <select id="rc-type" class="form-select form-select-sm mb-1">
+            <option value="pothole">Pothole</option>
+            <option value="poor">Poor Surface</option>
+            <option value="under_construction">Under Construction</option>
+            <option value="accident">Accident</option>
+            <option value="flooding">Flooding</option>
+            <option value="closed">Road Closed</option>
+            <option value="fair">Fair Surface</option>
+            <option value="good">Good Surface</option>
+        </select>
+        <select id="rc-severity" class="form-select form-select-sm mb-1">
+            <option value="low">Low</option>
+            <option value="medium" selected>Medium</option>
+            <option value="high">High</option>
+            <option value="critical">Critical</option>
+        </select>
+        <textarea id="rc-desc" class="form-control form-control-sm mb-1" placeholder="Description (optional)" rows="2"></textarea>
+        <button id="report-condition-btn" class="btn btn-sm btn-warning w-100">Submit Report</button>
+    </div>
 </div>
 <div id="map"></div>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="{% static 'vendor/leaflet/leaflet.js' %}"></script>
 <script>
 const CSRF_TOKEN = "{{ csrf_token }}";
 
-// Map
 const map = L.map('map').setView([17.4435, 78.3772], 12);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; OpenStreetMap contributors', maxZoom: 19
@@ -73,7 +121,137 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 
 let routeLayers = [];
 let markers = [];
+let conditionMarkers = [];
+let trafficOverlay = [];
+let conditionsVisible = false;
+let trafficVisible = false;
 
+let pinMode = null; // 'origin' or 'dest'
+let pinPreviewMarker = null;
+
+function reverseGeocode(lat, lng) {
+    return fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&addressdetails=1`)
+        .then(r => r.json())
+        .then(d => d.display_name || `${lat.toFixed(4)}, ${lng.toFixed(4)}`)
+        .catch(() => `${lat.toFixed(4)}, ${lng.toFixed(4)}`);
+}
+
+function setLocation(field, lat, lng, name) {
+    const input = document.getElementById(field + '-input');
+    const status = document.getElementById(field + '-pin-status');
+    input.value = name;
+    input.dataset.lat = lat;
+    input.dataset.lng = lng;
+    document.getElementById(field + '-suggestions').innerHTML = '';
+    status.style.display = 'none';
+    if (field === 'origin') input.style.borderColor = '#0d6efd';
+    else input.style.borderColor = '#dc3545';
+    if (pinMode === field) {
+        enterPinMode(null);
+    }
+    updatePinMarkers();
+}
+
+function enterPinMode(field) {
+    if (pinPreviewMarker) {
+        map.removeLayer(pinPreviewMarker);
+        pinPreviewMarker = null;
+    }
+    if (!field) {
+        pinMode = null;
+        document.getElementById('origin-input').classList.remove('pin-active');
+        document.getElementById('dest-input').classList.remove('pin-active');
+        document.getElementById('origin-pin-status').style.display = 'none';
+        document.getElementById('dest-pin-status').style.display = 'none';
+        document.getElementById('map').classList.remove('pin-cursor');
+        return;
+    }
+    pinMode = field;
+    document.getElementById('map').classList.add('pin-cursor');
+    if (field === 'origin') {
+        document.getElementById('origin-input').classList.add('pin-active');
+        document.getElementById('dest-input').classList.remove('pin-active');
+        document.getElementById('origin-pin-status').style.display = 'block';
+        document.getElementById('dest-pin-status').style.display = 'none';
+    } else {
+        document.getElementById('dest-input').classList.add('pin-active');
+        document.getElementById('origin-input').classList.remove('pin-active');
+        document.getElementById('dest-pin-status').style.display = 'block';
+        document.getElementById('origin-pin-status').style.display = 'none';
+    }
+}
+
+function updatePinMarkers() {
+    markers.forEach(m => map.removeLayer(m));
+    markers = [];
+    const o = document.getElementById('origin-input');
+    const d = document.getElementById('dest-input');
+    if (o.dataset.lat) {
+        const m = L.marker([parseFloat(o.dataset.lat), parseFloat(o.dataset.lng)], {
+            icon: L.divIcon({className: '', html: '<div style="background:#0d6efd;color:#fff;padding:2px 8px;border-radius:4px;font-size:12px;white-space:nowrap;">Origin</div>', iconSize: [50, 20], iconAnchor: [25, 10]})
+        }).addTo(map);
+        markers.push(m);
+    }
+    if (d.dataset.lat) {
+        const m = L.marker([parseFloat(d.dataset.lat), parseFloat(d.dataset.lng)], {
+            icon: L.divIcon({className: '', html: '<div style="background:#dc3545;color:#fff;padding:2px 8px;border-radius:4px;font-size:12px;white-space:nowrap;">Destination</div>', iconSize: [70, 20], iconAnchor: [35, 10]})
+        }).addTo(map);
+        markers.push(m);
+    }
+    if (markers.length === 2) {
+        try {
+            const group = L.featureGroup(markers);
+            map.fitBounds(group.getBounds().pad(0.2));
+        } catch(e) {}
+    }
+}
+
+// Map click handler
+map.on('click', function(e) {
+    const {lat, lng} = e.latlng;
+
+    // If in pin mode, set origin or dest
+    if (pinMode) {
+        const field = pinMode;
+        reverseGeocode(lat, lng).then(name => {
+            setLocation(field, lat, lng, name);
+        });
+        return;
+    }
+
+    // If road name input is focused, fill it
+    const rcInput = document.getElementById('rc-road-name');
+    if (rcInput === document.activeElement) {
+        reverseGeocode(lat, lng).then(name => {
+            rcInput.value = name.split(',')[0];
+            rcInput.dataset.lat = lat;
+            rcInput.dataset.lng = lng;
+        });
+        return;
+    }
+});
+
+// Mouse move for pin preview
+map.on('mousemove', function(e) {
+    if (!pinMode) {
+        if (pinPreviewMarker) {
+            map.removeLayer(pinPreviewMarker);
+            pinPreviewMarker = null;
+        }
+        return;
+    }
+    if (!pinPreviewMarker) {
+        pinPreviewMarker = L.circleMarker([e.latlng.lat, e.latlng.lng], {
+            radius: 8, color: pinMode === 'origin' ? '#0d6efd' : '#dc3545',
+            fillColor: pinMode === 'origin' ? '#0d6efd' : '#dc3545',
+            fillOpacity: 0.5, weight: 2, opacity: 0.8
+        }).addTo(map);
+    } else {
+        pinPreviewMarker.setLatLng(e.latlng);
+    }
+});
+
+// Suggestions
 function getSuggestions(input, target) {
     const val = input.value.trim();
     if (val.length < 3) { document.getElementById(target).innerHTML = ''; return; }
@@ -87,10 +265,8 @@ function getSuggestions(input, target) {
             ).join('');
             box.querySelectorAll('.suggestion-item').forEach(el => {
                 el.addEventListener('click', () => {
-                    input.value = el.dataset.name;
-                    input.dataset.lat = el.dataset.lat;
-                    input.dataset.lng = el.dataset.lng;
-                    box.innerHTML = '';
+                    const field = target === 'origin-suggestions' ? 'origin' : 'dest';
+                    setLocation(field, el.dataset.lat, el.dataset.lng, el.dataset.name);
                 });
             });
         }).catch(() => {});
@@ -103,6 +279,43 @@ document.getElementById('dest-input').addEventListener('input', function() {
     getSuggestions(this, 'dest-suggestions');
 });
 
+// Pin buttons
+document.getElementById('origin-pin-btn').addEventListener('click', function() {
+    if (pinMode === 'origin') { enterPinMode(null); return; }
+    enterPinMode('origin');
+});
+document.getElementById('dest-pin-btn').addEventListener('click', function() {
+    if (pinMode === 'dest') { enterPinMode(null); return; }
+    enterPinMode('dest');
+});
+
+// Swap
+document.getElementById('swap-btn').addEventListener('click', function() {
+    const o = document.getElementById('origin-input');
+    const d = document.getElementById('dest-input');
+    const oLat = o.dataset.lat, oLng = o.dataset.lng, oVal = o.value;
+    const dLat = d.dataset.lat, dLng = d.dataset.lng, dVal = d.value;
+    if (oLat || dLat) {
+        o.value = dVal; o.dataset.lat = dLat; o.dataset.lng = dLng;
+        d.value = oVal; d.dataset.lat = oLat; d.dataset.lng = oLng;
+        updatePinMarkers();
+    }
+});
+
+// Clear
+document.getElementById('clear-btn').addEventListener('click', function() {
+    const o = document.getElementById('origin-input');
+    const d = document.getElementById('dest-input');
+    o.value = ''; o.dataset.lat = ''; o.dataset.lng = ''; o.style.borderColor = '';
+    d.value = ''; d.dataset.lat = ''; d.dataset.lng = ''; d.style.borderColor = '';
+    document.getElementById('results').style.display = 'none';
+    enterPinMode(null);
+    routeLayers.forEach(l => map.removeLayer(l));
+    routeLayers = [];
+    markers.forEach(m => map.removeLayer(m));
+    markers = [];
+});
+
 document.getElementById('find-route-btn').addEventListener('click', findRoute);
 document.addEventListener('keydown', e => { if (e.key === 'Enter') findRoute(); });
 
@@ -112,11 +325,11 @@ function findRoute() {
     const vehicle = document.getElementById('vehicle-select').value;
 
     if (!origin.dataset.lat || !dest.dataset.lat) {
-        alert('Please select locations from suggestions');
+        if (!origin.dataset.lat) alert('Please set origin (type or click pin on map)');
+        else alert('Please set destination (type or click pin on map)');
         return;
     }
 
-    // Clear previous
     routeLayers.forEach(l => map.removeLayer(l));
     routeLayers = [];
     markers.forEach(m => map.removeLayer(m));
@@ -153,7 +366,6 @@ function findRoute() {
             const color = trafficColors[route.traffic.level] || '#28a745';
             const level = route.traffic.level || 'light';
 
-            // Draw on map
             try {
                 const polyline = L.geoJSON(route.geometry, {
                     style: {color, weight: idx === 0 ? 6 : 4, opacity: 0.8}
@@ -161,12 +373,11 @@ function findRoute() {
                 routeLayers.push(polyline);
             } catch(e) {}
 
-            // Card
             const card = document.createElement('div');
             card.className = `route-card${route.recommended ? ' recommended' : ''}`;
             card.innerHTML = `
                 <div class="d-flex justify-content-between align-items-center">
-                    <strong>${route.recommended ? '🏆 Route ' + (idx+1) : 'Route ' + (idx+1)}</strong>
+                    <strong>${route.recommended ? 'Route ' + (idx+1) : 'Route ' + (idx+1)}</strong>
                     <span><span class="traffic-dot" style="background:${color}"></span>${trafficLabels[level]}</span>
                 </div>
                 <div class="row mt-2">
@@ -175,39 +386,137 @@ function findRoute() {
                     <div class="col-4"><span class="label">Toll</span><div class="value">₹${route.toll || 'N/A'}</div></div>
                 </div>
                 <div class="mt-1"><span class="label">Pricing:</span> ${route.pricing_model || 'N/A'}</div>
+                ${route.road_condition_factor > 0 ? `<div class="mt-1 text-danger small">Road condition delay: +${(route.road_condition_factor * 100).toFixed(0)}%</div>` : ''}
             `;
             card.addEventListener('click', () => {
-                map.fitBounds(routeLayers[idx].getBounds());
+                if (routeLayers[idx]) map.fitBounds(routeLayers[idx].getBounds());
             });
             container.appendChild(card);
         });
 
-        // Fit map to all routes
         if (routeLayers.length > 0) {
             try {
                 const group = L.featureGroup(routeLayers);
                 map.fitBounds(group.getBounds().pad(0.1));
-            } catch(e) { /* ignore */ }
+            } catch(e) {}
         }
 
-        // Markers
-        const o = L.marker([parseFloat(origin.dataset.lat), parseFloat(origin.dataset.lng)], {
-            icon: L.divIcon({className: '', html: '<div style="background:#0d6efd;color:#fff;padding:2px 8px;border-radius:4px;font-size:12px;white-space:nowrap;">Origin</div>', iconSize: [50, 20], iconAnchor: [25, 10]})
-        }).addTo(map);
-        const d = L.marker([parseFloat(dest.dataset.lat), parseFloat(dest.dataset.lng)], {
-            icon: L.divIcon({className: '', html: '<div style="background:#dc3545;color:#fff;padding:2px 8px;border-radius:4px;font-size:12px;white-space:nowrap;">Destination</div>', iconSize: [70, 20], iconAnchor: [35, 10]})
-        }).addTo(map);
-        markers = [o, d];
+        updatePinMarkers();
     })
     .catch(err => {
         alert('Route error: ' + err.message);
     });
 }
+
+// Road Conditions Toggle
+document.getElementById('toggle-conditions-btn').addEventListener('click', function() {
+    conditionsVisible = !conditionsVisible;
+    this.textContent = conditionsVisible ? 'Hide Road Conditions' : 'Show Road Conditions';
+    this.classList.toggle('btn-secondary');
+    this.classList.toggle('btn-outline-secondary');
+    if (conditionsVisible) {
+        loadRoadConditions();
+    } else {
+        conditionMarkers.forEach(m => map.removeLayer(m));
+        conditionMarkers = [];
+    }
+});
+
+function loadRoadConditions() {
+    fetch('/api/road-conditions/')
+        .then(r => r.json())
+        .then(data => {
+            conditionMarkers.forEach(m => map.removeLayer(m));
+            conditionMarkers = [];
+            const icons = {
+                pothole: {color: '#dc3545', text: 'P'},
+                poor: {color: '#fd7e14', text: 'R'},
+                under_construction: {color: '#ffc107', text: 'C'},
+                accident: {color: '#dc3545', text: 'A'},
+                flooding: {color: '#0d6efd', text: 'F'},
+                closed: {color: '#6f42c1', text: 'X'},
+                fair: {color: '#20c997', text: 'O'},
+                good: {color: '#28a745', text: 'G'},
+            };
+            data.forEach(rc => {
+                if (rc.status === 'resolved') return;
+                const icon = icons[rc.condition_type] || {color: '#6c757d', text: '?'};
+                const marker = L.marker([rc.lat, rc.lng], {
+                    icon: L.divIcon({
+                        className: '',
+                        html: `<div style="background:${icon.color};color:#fff;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:bold;border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,0.3);">${icon.text}</div>`,
+                        iconSize: [24, 24],
+                        iconAnchor: [12, 12],
+                    })
+                }).addTo(map);
+                marker.bindPopup(`<strong>${rc.road_name}</strong><br>Type: ${rc.condition_type}<br>Severity: ${rc.severity}<br>Status: ${rc.status}<br>Reports: ${rc.report_count}${rc.description ? '<br>' + rc.description : ''}`);
+                conditionMarkers.push(marker);
+            });
+        });
+}
+
+// Traffic Overlay Toggle
+document.getElementById('toggle-traffic-overlay-btn').addEventListener('click', function() {
+    trafficVisible = !trafficVisible;
+    this.textContent = trafficVisible ? 'Hide Traffic' : 'Show Traffic';
+    this.classList.toggle('btn-secondary');
+    this.classList.toggle('btn-outline-secondary');
+    if (trafficVisible) {
+        loadTrafficOverlay();
+    } else {
+        trafficOverlay.forEach(l => map.removeLayer(l));
+        trafficOverlay = [];
+    }
+});
+
+function loadTrafficOverlay() {
+    fetch('/api/road-conditions/')
+        .then(r => r.json())
+        .then(data => {
+            trafficOverlay.forEach(l => map.removeLayer(l));
+            trafficOverlay = [];
+            const severityColors = {low: '#28a745', medium: '#ffc107', high: '#fd7e14', critical: '#dc3545'};
+            data.forEach(rc => {
+                if (rc.status === 'resolved') return;
+                const color = severityColors[rc.severity] || '#6c757d';
+                const circle = L.circleMarker([rc.lat, rc.lng], {
+                    radius: rc.severity === 'critical' ? 10 : rc.severity === 'high' ? 8 : rc.severity === 'medium' ? 6 : 4,
+                    color: color, fillColor: color, fillOpacity: 0.4, weight: 1, opacity: 0.6
+                }).addTo(map);
+                circle.bindPopup(`<strong>${rc.road_name}</strong><br>Type: ${rc.condition_type}<br>Severity: ${rc.severity}`);
+                trafficOverlay.push(circle);
+            });
+        });
+}
+
+// Report Road Condition
+document.getElementById('report-condition-btn').addEventListener('click', function() {
+    const roadName = document.getElementById('rc-road-name').value.trim();
+    if (!roadName) { alert('Enter a road name'); return; }
+    if (!map.getCenter()) { alert('Map not ready'); return; }
+    const center = map.getCenter();
+    fetch('/api/road-conditions/report/', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN},
+        body: JSON.stringify({
+            road_name: roadName,
+            lat: document.getElementById('rc-road-name').dataset.lat || center.lat,
+            lng: document.getElementById('rc-road-name').dataset.lng || center.lng,
+            condition_type: document.getElementById('rc-type').value,
+            severity: document.getElementById('rc-severity').value,
+            description: document.getElementById('rc-desc').value,
+        })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.id) {
+            alert('Report submitted. Status: ' + data.status);
+            if (conditionsVisible) loadRoadConditions();
+        } else {
+            alert('Error: ' + (data.error || 'Unknown'));
+        }
+    })
+    .catch(err => alert('Error: ' + err.message));
+});
 </script>
-<style>
-.suggestions-box { position: absolute; z-index: 1000; background: white; border: 1px solid #ddd; max-height: 200px; overflow-y: auto; width: calc(100% - 16px); }
-.suggestion-item { padding: 6px 10px; cursor: pointer; font-size: 13px; border-bottom: 1px solid #f0f0f0; }
-.suggestion-item:hover { background: #e9ecef; }
-#origin-suggestions, #dest-suggestions { position: relative; }
-</style>
 {% endblock %}

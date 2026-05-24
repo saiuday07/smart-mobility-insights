@@ -1,7 +1,8 @@
 {% extends "base.html" %}
+{% load static %}
 {% block title %}Dashboard — Smart Mobility{% endblock %}
 {% block extra_head %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script src="{% static 'vendor/chartjs/chart.umd.min.js' %}"></script>
 <style>
 .stat-card { border-radius: 12px; padding: 20px; text-align: center; color: white; }
 .stat-card h2 { margin: 0; font-size: 32px; font-weight: 700; }
@@ -10,7 +11,7 @@
 {% endblock %}
 {% block content %}
 <div class="container-fluid p-4">
-    <h4 class="mb-4">👤 {{ user.username }}'s Dashboard</h4>
+    <h4 class="mb-4">{{ user.username }}'s Dashboard</h4>
 
     <div class="row g-3 mb-4">
         <div class="col-md-4">
@@ -59,10 +60,63 @@
             </div>
         </div>
         <div class="col-md-4">
-            <div class="card">
+            <div class="card mb-3">
                 <div class="card-header">Spending Trend</div>
                 <div class="card-body">
-                    <canvas id="spendingChart" height="200"></canvas>
+                    <canvas id="spendingChart" height="160"></canvas>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-header">Vehicle Usage</div>
+                <div class="card-body">
+                    <canvas id="vehicleChart" height="160"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mt-2">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">Recent Road Conditions</div>
+                <div class="card-body p-0">
+                    <table class="table table-sm mb-0">
+                        <thead><tr><th>Road</th><th>Condition</th><th>Severity</th><th>Status</th></tr></thead>
+                        <tbody>
+                            {% for rc in recent_conditions %}
+                            <tr>
+                                <td>{{ rc.road_name|truncatechars:20 }}</td>
+                                <td>{{ rc.get_condition_type_display }}</td>
+                                <td><span class="badge bg-{% if rc.severity == 'critical' %}danger{% elif rc.severity == 'high' %}warning{% else %}secondary{% endif %}">{{ rc.get_severity_display }}</span></td>
+                                <td><span class="badge bg-{% if rc.status == 'verified' %}success{% elif rc.status == 'resolved' %}light text-dark{% else %}secondary{% endif %}">{{ rc.get_status_display }}</span></td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="4" class="text-center text-muted py-3">No road conditions reported.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">My Reports</div>
+                <div class="card-body p-0">
+                    <table class="table table-sm mb-0">
+                        <thead><tr><th>Road</th><th>Condition</th><th>Status</th><th>Date</th></tr></thead>
+                        <tbody>
+                            {% for rp in my_reports %}
+                            <tr>
+                                <td>{{ rp.road_name|truncatechars:20 }}</td>
+                                <td>{{ rp.get_condition_type_display }}</td>
+                                <td><span class="badge bg-{% if rp.status == 'verified' %}success{% elif rp.status == 'resolved' %}light text-dark{% else %}secondary{% endif %}">{{ rp.get_status_display }}</span></td>
+                                <td>{{ rp.created_at|date:"d M" }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="4" class="text-center text-muted py-3">You haven't reported any conditions yet.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
@@ -86,6 +140,18 @@ if (trips.length > 0 && document.getElementById('spendingChart')) {
             datasets: [{ label: 'Toll (₹)', data: data, borderColor: '#0d6efd', tension: 0.3, fill: true }]
         },
         options: { responsive: true, plugins: { legend: { display: false } } }
+    });
+}
+
+const vehicleData = {{ vehicle_data|safe }};
+if (vehicleData.length > 0 && document.getElementById('vehicleChart')) {
+    new Chart(document.getElementById('vehicleChart'), {
+        type: 'doughnut',
+        data: {
+            labels: vehicleData.map(v => v.vehicle_type || 'unknown'),
+            datasets: [{ data: vehicleData.map(v => v.count), backgroundColor: ['#0d6efd','#198754','#ffc107','#dc3545','#6f42c1'] }]
+        },
+        options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
     });
 }
 </script>

@@ -12,4 +12,8 @@ urlpatterns = [
     path("api/route/", views.api_route, name="api_route"),
     path("api/trips/", views.api_trips, name="api_trips"),
     path("api/admin/stats/", views.api_admin_stats, name="api_admin_stats"),
+    path("api/road-conditions/", views.api_road_conditions, name="api_road_conditions"),
+    path("api/road-conditions/report/", views.api_report_road_condition, name="api_report_road_condition"),
+    path("api/road-conditions/<int:condition_id>/resolve/", views.api_resolve_road_condition, name="api_resolve_road_condition"),
+    path("api/road-conditions/stats/", views.api_road_condition_stats, name="api_road_condition_stats"),
 ]

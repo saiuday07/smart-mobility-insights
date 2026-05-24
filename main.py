@@ -1,11 +1,11 @@
 # main.py
 
 from automation.distance_service import get_distance
-from automation.decision_engine import choose_pricing_model
 from core.toll_engine import (
     calculate_slab_toll,
     calculate_dynamic_toll,
-    vehicle_multiplier
+    vehicle_multiplier,
+    choose_pricing_model,
 )
 from automation.traffic_insights import (
     display_traffic_summary,
