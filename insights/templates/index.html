@@ -387,6 +387,7 @@ function findRoute() {
                 </div>
                 <div class="mt-1"><span class="label">Pricing:</span> ${route.pricing_model || 'N/A'}</div>
                 ${route.road_condition_factor > 0 ? `<div class="mt-1 text-danger small">Road condition delay: +${(route.road_condition_factor * 100).toFixed(0)}%</div>` : ''}
+                ${route.traffic.weather_factor > 0 ? `<div class="mt-1 text-primary small"><strong>Weather:</strong> ${route.traffic.weather_description} — +${(route.traffic.weather_factor * 100).toFixed(0)}% delay</div>` : ''}
             `;
             card.addEventListener('click', () => {
                 if (routeLayers[idx]) map.fitBounds(routeLayers[idx].getBounds());

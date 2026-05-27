@@ -58,11 +58,19 @@ def get_area_factor(origin_name, dest_name, congestion_logs):
     return 1.0
 
 
-def get_traffic_info(origin_name, dest_name, congestion_logs=None):
+def get_traffic_info(origin_name, dest_name, congestion_logs=None, origin_lat=None, origin_lng=None, dest_lat=None, dest_lng=None):
     config = _load_config()
     time_factor = get_time_factor(config)
     area_factor = get_area_factor(origin_name, dest_name, congestion_logs or [])
     combined = max(time_factor, area_factor)
+    weather_factor = 0.0
+    weather_desc = None
+    if origin_lat is not None:
+        mid_lat = (origin_lat + (dest_lat or origin_lat)) / 2
+        mid_lng = (origin_lng + (dest_lng or origin_lng)) / 2
+        from .weather import get_weather_factor
+        weather_factor, weather_desc = get_weather_factor(mid_lat, mid_lng)
+    combined += weather_factor
     level, icon = get_congestion_level(combined, config)
     return {
         'factor': round(combined, 2),
@@ -70,4 +78,6 @@ def get_traffic_info(origin_name, dest_name, congestion_logs=None):
         'icon': icon,
         'time_factor': time_factor,
         'area_factor': area_factor,
+        'weather_factor': round(weather_factor, 2),
+        'weather_description': weather_desc,
     }

@@ -177,7 +177,11 @@ def api_route(request):
 
         osrm_data = get_routes(origin_lat, origin_lng, dest_lat, dest_lng)
         congestion_logs = list(CongestionLog.objects.all().values("location_name"))
-        traffic = get_traffic_info(origin_name, dest_name, congestion_logs)
+        traffic = get_traffic_info(
+            origin_name, dest_name, congestion_logs,
+            origin_lat=origin_lat, origin_lng=origin_lng,
+            dest_lat=dest_lat, dest_lng=dest_lng,
+        )
 
         from .road_conditions import get_road_condition_factor
         road_factor = get_road_condition_factor(

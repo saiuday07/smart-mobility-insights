@@ -33,5 +33,26 @@
             "off_peak": 1.0,
             "night": 0.7
         }
+    },
+    "weather": {
+        "rain_factors": {
+            "drizzle": 0.1,
+            "light": 0.15,
+            "moderate": 0.35,
+            "heavy": 0.6,
+            "extreme": 1.0,
+            "freezing": 1.2
+        },
+        "snow_factors": {
+            "light": 0.3,
+            "heavy": 0.8
+        },
+        "other_factors": {
+            "fog": 0.2,
+            "haze": 0.1,
+            "mist": 0.05,
+            "thunderstorm": 0.9,
+            "severe_thunderstorm": 1.2
+        }
     }
 }
